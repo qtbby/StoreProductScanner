@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover, height=device-height">
+  <title>Christ the King Parish Youth Apostolate Ministore Counter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <!-- Compact Header -->
+  <div class="compact-header">
+    <h1>📿 Ministore Counter</h1>
+    <div class="tabs">
+      <button class="tab active" data-tab="scan">📷 Sell</button>
+      <button class="tab" data-tab="register">📝 Add</button>
+      <button class="tab" data-tab="products">📦 Items</button>
+    </div>
+  </div>
+
+  <!-- Tab 1: Sell (Compact - fits one screen) -->
+  <div class="tab-content active" id="scanTab">
+    <!-- Mini Scanner -->
+    <div class="mini-scanner" id="scannerContainer">
+      <video id="scannerVideo" autoplay playsinline></video>
+      <div class="scanner-frame-mini"></div>
+      <span class="scan-status" id="scanStatus">Point camera at barcode</span>
+    </div>
+    <button class="btn mini-btn" id="toggleScannerBtn" style="font-size:0.7rem;padding:6px;">📷 Toggle Scanner</button>
+    
+    <!-- Quick Search -->
+    <input type="text" id="productSearchSell" placeholder="🔍 Search or scan..." autocomplete="off" class="compact-input">
+    <div class="search-results-mini" id="searchResults"></div>
+    
+    <!-- Current Scan Display -->
+    <div class="current-scan" id="currentScan">
+      <div class="scan-row">
+        <input type="text" id="editBarcode" placeholder="Barcode" class="half-input" inputmode="numeric" pattern="[0-9]*">
+        <input type="text" id="editName" placeholder="Product name" class="half-input">
+      </div>
+      <div class="scan-row">
+        <input type="number" id="editPrice" placeholder="Price ₱" class="half-input" step="0.01" min="0" inputmode="decimal">
+        <input type="number" id="editQty" value="1" min="1" class="half-input qty-input" inputmode="numeric" pattern="[0-9]*">
+        <button class="add-btn compact-add" id="addToCartBtn">+</button>
+      </div>
+    </div>
+    
+    <!-- Cart (compact) -->
+    <div class="cart-mini" id="cartContainer">
+      <div class="empty-state-mini">Cart empty</div>
+    </div>
+    
+    <!-- Total & Payment -->
+    <div class="payment-section">
+      <div class="total-row">
+        <span>Total:</span>
+        <span class="total-amount" id="totalDisplay">₱0.00</span>
+      </div>
+      <div class="payment-row">
+        <input type="number" id="paymentInput" placeholder="Cash amount ₱" class="payment-input" step="0.01" min="0" inputmode="decimal">
+        <button class="btn primary compact-btn" id="calculateChangeBtn">💰</button>
+      </div>
+      <div class="change-row" id="changeDisplay" style="display:none;">
+        <span>Change:</span>
+        <span class="change-amount" id="changeAmount">₱0.00</span>
+      </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="action-row">
+      <button class="btn primary" id="completeTransactionBtn">✅ Complete</button>
+      <button class="btn warning" id="resetCartBtn">🗑️</button>
+    </div>
+    
+    <!-- Toggle Buttons for Utang & Transactions -->
+    <div class="toggle-sections">
+      <button class="btn toggle-section-btn" id="toggleUtangBtn">📋 Utang ▸</button>
+      <button class="btn toggle-section-btn" id="toggleTransactionsBtn">🧾 Transactions ▸</button>
+    </div>
+    
+    <!-- Hidden Utang Section -->
+    <div class="collapsible-section" id="utangSection" style="display:none;">
+      <div class="utang-header">
+        <span>📋 Utang (Pay Later)</span>
+        <div style="display:flex;gap:4px;">
+          <button class="btn small-btn" id="downloadUtangBtn">📥</button>
+          <button class="btn small-btn warning" id="clearUtangLogBtn">🗑️</button>
+        </div>
+      </div>
+      <div class="utang-form">
+        <input type="text" id="utangName" placeholder="Customer name" autocomplete="off">
+        <button class="btn" id="addUtangBtn" style="font-size:0.8rem;">📝 Record Utang</button>
+      </div>
+      <div class="transaction-log" id="utangLogContainer"><div>No records</div></div>
+    </div>
+    
+    <!-- Hidden Transactions Section -->
+    <div class="collapsible-section" id="transactionsSection" style="display:none;">
+      <div class="section-title-with-btn">
+        <span>🧾 Recent Transactions</span>
+        <div style="display:flex;gap:4px;">
+          <button class="btn small-btn" id="downloadTransactionsBtn">📥</button>
+          <button class="btn small-btn warning" id="clearTransactionsBtn">🗑️</button>
+        </div>
+      </div>
+      <div class="transaction-log" id="transactionLogContainer"><div>No transactions</div></div>
+    </div>
+  </div>
+
+  <!-- Tab 2: Add Product -->
+  <div class="tab-content" id="registerTab">
+    <div class="register-section">
+      <h3>Add New Product</h3>
+      <div class="register-type-toggle">
+        <button class="type-btn active" data-type="barcode">🏷️ Barcode</button>
+        <button class="type-btn" data-type="nobarcode">📦 No Barcode</button>
+      </div>
+      <div id="registerScannerArea">
+        <div id="registerScannerContainer" class="scanner-container">
+          <video id="registerScannerVideo" autoplay playsinline></video>
+          <div class="scanner-overlay"><div class="scanner-frame"></div></div>
+        </div>
+        <div class="scanner-controls">
+          <button class="btn scanner-btn" id="startRegisterScannerBtn">📷 Scan</button>
+          <button class="btn scanner-btn warning" id="stopRegisterScannerBtn" disabled>⏹️ Stop</button>
+        </div>
+      </div>
+      <div class="form-group" id="barcodeField">
+        <label>Barcode</label>
+        <input type="text" id="registerBarcode" placeholder="Scan or type" inputmode="numeric" pattern="[0-9]*">
+      </div>
+      <div class="form-group">
+        <label>Name *</label>
+        <input type="text" id="registerName" placeholder="Product name">
+      </div>
+      <div class="form-group">
+        <label>Price (₱) *</label>
+        <input type="number" id="registerPrice" placeholder="0.00" step="0.01" min="0" inputmode="decimal">
+      </div>
+      <div class="form-group">
+        <label>Initial Stock</label>
+        <input type="number" id="registerStock" placeholder="0" min="0" step="1" inputmode="numeric" pattern="[0-9]*" value="0">
+      </div>
+      <div class="form-group" id="customIdField" style="display:none;">
+        <label>Custom ID</label>
+        <input type="text" id="registerCustomId" placeholder="e.g., COKE500">
+      </div>
+      <button class="btn primary" id="saveProductBtn">💾 Save</button>
+      <div id="registerMessage" class="message"></div>
+    </div>
+  </div>
+
+  <!-- Tab 3: Products -->
+  <div class="tab-content" id="productsTab">
+    <div class="products-header">
+      <h3>Products (Stock)</h3>
+      <button class="btn small-btn warning" id="clearProductsBtn">🗑️ Clear</button>
+    </div>
+    <div class="search-box">
+      <input type="text" id="productSearch" placeholder="Search...">
+    </div>
+    <div class="product-list" id="productListContainer">
+      <div class="empty-state">No products yet</div>
+    </div>
+  </div>
+  
+  <div class="reset-options">
+    <button class="btn reset-btn" id="clearCartOnlyBtn">🗑️ Clear Cart</button>
+    <button class="btn reset-btn warning" id="resetAllDataBtn">⚠️ Reset All</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/@zxing/library@0.19.2/umd/index.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
