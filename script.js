@@ -4,7 +4,7 @@
   const STORAGE_TRANSACTIONS = 'ckp_ministore_transactions';
   const STORAGE_UTANG = 'ckp_ministore_utang';
 
-  let products = {}; // { id: { name, price, barcode, stock, hasBarcode } }
+  let products = {};
   let cart = [];
   let transactions = [];
   let utangRecords = [];
@@ -67,6 +67,9 @@
   const toggleTransactionsBtn = document.getElementById('toggleTransactionsBtn');
   const utangSection = document.getElementById('utangSection');
   const transactionsSection = document.getElementById('transactionsSection');
+  const backupDataBtn = document.getElementById('backupDataBtn');
+  const restoreDataBtn = document.getElementById('restoreDataBtn');
+  const restoreFileInput = document.getElementById('restoreFileInput');
 
   function playBeep(type = 'success') {
     try {
@@ -108,18 +111,13 @@
 
   tabButtons.forEach(t=>t.addEventListener('click',()=>switchTab(t.getAttribute('data-tab'))));
 
-  // ============ TOGGLE SECTIONS ============
+  // Toggle sections
   function toggleSection(section, btn, label) {
-    if(section.style.display==='none') {
-      section.style.display='block';
-      btn.textContent=label+' ▾';
-    } else {
-      section.style.display='none';
-      btn.textContent=label+' ▸';
-    }
+    if(section.style.display==='none') { section.style.display='block'; btn.textContent=label+' ▾'; }
+    else { section.style.display='none'; btn.textContent=label+' ▸'; }
   }
 
-  // ============ SCANNER WITH AUTO-ADD & STOCK CHECK ============
+  // ============ SCANNER ============
   async function startSellScanner() {
     if(sellScannerActive) return;
     try {
@@ -162,7 +160,6 @@
     const product=lookupByBarcode(barcode);
     
     if(product) {
-      // Check stock
       if(product.stock !== undefined && product.stock <= 0) {
         playBeep('error');
         scanStatus.textContent=`⚠️ Out of stock: ${product.name}`;
@@ -193,7 +190,6 @@
   function autoAddToCart(product) {
     const existing=cart.findIndex(i=>i.productId===product.id);
     if(existing!==-1) {
-      // Check stock before adding more
       if(product.stock !== undefined && cart[existing].qty >= product.stock) {
         scanStatus.textContent=`⚠️ Only ${product.stock} in stock`;
         setTimeout(()=>{if(sellScannerActive)scanStatus.textContent='🔍 Scanning...';},1500);
@@ -201,24 +197,14 @@
       }
       cart[existing].qty+=1;
     } else {
-      cart.push({
-        id:Date.now(),
-        productId:product.id,
-        name:product.name,
-        price:parseFloat(product.price),
-        qty:1
-      });
+      cart.push({id:Date.now(),productId:product.id,name:product.name,price:parseFloat(product.price),qty:1});
     }
     saveAll();
     renderCart();
-    paymentInput.value='';
-    changeDisplay.style.display='none';
+    resetPaymentAndChange();
   }
 
-  function toggleScanner() {
-    if(sellScannerActive) stopSellScanner();
-    else startSellScanner();
-  }
+  function toggleScanner() { if(sellScannerActive) stopSellScanner(); else startSellScanner(); }
 
   function stopSellScanner() {
     sellScannerActive=false;
@@ -268,7 +254,6 @@
 
   typeBtns.forEach(btn=>{btn.addEventListener('click',()=>{typeBtns.forEach(b=>b.classList.remove('active'));btn.classList.add('active');registerMode=btn.getAttribute('data-type');if(registerMode==='barcode'){document.getElementById('registerScannerArea').style.display='block';document.getElementById('barcodeField').style.display='flex';document.getElementById('customIdField').style.display='none';}else{document.getElementById('registerScannerArea').style.display='none';document.getElementById('barcodeField').style.display='none';document.getElementById('customIdField').style.display='flex';stopRegisterScanner();}});});
 
-  // ============ SEARCH ============
   function searchProducts(query) {
     const q=query.toLowerCase().trim();const r=[];
     Object.entries(products).forEach(([id,d])=>{if(d.name.toLowerCase().includes(q)||id.toLowerCase().includes(q)||(d.barcode&&d.barcode.includes(q)))r.push({id,...d});});
@@ -293,7 +278,6 @@
 
   function lookupByBarcode(barcode){for(const[id,d]of Object.entries(products)){if(d.barcode===barcode)return{id,...d};}return null;}
 
-  // ============ SAVE PRODUCT ============
   function saveProduct(){
     const name=registerName.value.trim(),price=parseFloat(registerPrice.value),stock=parseInt(registerStock.value)||0;
     if(!name){showMessage('Enter name','error');return;}
@@ -308,48 +292,34 @@
 
   function showMessage(m,t){registerMessage.textContent=m;registerMessage.className=`message ${t}`;setTimeout(()=>registerMessage.className='message',2000);}
 
-  // ============ MANUAL ADD ============
   function manualAddToCart(){
     const name=editName.value.trim();
     const barcode=editBarcode.value.trim();
     const price=parseFloat(editPrice.value)||0;
     const qty=Math.max(1,parseInt(editQty.value)||1);
-    
     if(!barcode&&!name){alert('Enter barcode or name');return;}
-    
     const productId=barcode||'CUSTOM_'+Date.now();
-    
-    if(name&&price>0){
-      products[productId]={name,price,barcode:barcode||null,hasBarcode:!!barcode,stock:0};
-      saveAll();
-    }
-    
+    if(name&&price>0){products[productId]={name,price,barcode:barcode||null,hasBarcode:!!barcode,stock:0};saveAll();}
     const product=products[productId];
     if(product&&product.stock!==undefined&&product.stock<=0){alert('Out of stock!');return;}
-    
     const existing=cart.findIndex(i=>i.productId===productId);
     if(existing!==-1){cart[existing].qty+=qty;}
     else{cart.push({id:Date.now(),productId,name:name||barcode,price,qty});}
-    
     saveAll();renderCart();playBeep('add');
     editBarcode.value='';editName.value='';editPrice.value='';editQty.value=1;
-    paymentInput.value='';changeDisplay.style.display='none';
+    resetPaymentAndChange();
   }
 
-  // ============ CART ============
   function updateCartQty(idx,qty){
     const newQty=Math.max(1,parseInt(qty)||1);
     const item=cart[idx];
     const product=products[item.productId];
-    if(product&&product.stock!==undefined&&newQty>product.stock){
-      alert(`Only ${product.stock} in stock!`);
-      return;
-    }
+    if(product&&product.stock!==undefined&&newQty>product.stock){alert(`Only ${product.stock} in stock!`);return;}
     cart[idx].qty=newQty;
-    saveAll();renderCart();paymentInput.value='';changeDisplay.style.display='none';
+    saveAll();renderCart();resetPaymentAndChange();
   }
 
-  function removeCartItem(idx){cart.splice(idx,1);saveAll();renderCart();paymentInput.value='';changeDisplay.style.display='none';}
+  function removeCartItem(idx){cart.splice(idx,1);saveAll();renderCart();resetPaymentAndChange();}
   function calculateTotal(){return cart.reduce((s,i)=>s+(i.price*i.qty),0);}
 
   function renderCart(){
@@ -367,7 +337,6 @@
       </div>
     `).join('');
     totalDisplay.textContent=`₱${calculateTotal().toFixed(2)}`;
-    
     document.querySelectorAll('.qty-mini-btn').forEach(b=>b.addEventListener('click',()=>{
       const idx=parseInt(b.dataset.idx),d=b.dataset.d;
       updateCartQty(idx,d==='+'?cart[idx].qty+1:cart[idx].qty-1);
@@ -376,16 +345,32 @@
     document.querySelectorAll('.remove-mini').forEach(b=>b.addEventListener('click',()=>removeCartItem(parseInt(b.dataset.idx))));
   }
 
-  // ============ PAYMENT ============
-  function calculateChange(){
-    const total=calculateTotal();
-    const payment=parseFloat(paymentInput.value)||0;
-    if(!cart.length){alert('Cart empty');return;}
-    if(payment<total){alert(`Insufficient! Need ₱${total.toFixed(2)}`);return;}
-    const change=payment-total;
-    changeAmount.textContent=`₱${change.toFixed(2)}`;
-    changeDisplay.style.display='flex';
-    playBeep('add');
+  // ============ REAL-TIME CHANGE CALCULATION ============
+  function resetPaymentAndChange() {
+    paymentInput.value = '';
+    changeDisplay.style.display = 'none';
+  }
+
+  function updateChangeDisplay() {
+    const total = calculateTotal();
+    if (cart.length === 0) {
+      changeDisplay.style.display = 'none';
+      return;
+    }
+    const payment = parseFloat(paymentInput.value);
+    if (isNaN(payment) || payment < total) {
+      changeDisplay.style.display = 'none';
+      return;
+    }
+    const change = payment - total;
+    changeAmount.textContent = `₱${change.toFixed(2)}`;
+    changeDisplay.style.display = 'flex';
+  }
+
+  // Button still works but real-time is handled by input event
+  function calculateChangeBtnClick() {
+    updateChangeDisplay();
+    if (changeDisplay.style.display === 'flex') playBeep('add');
   }
 
   function completeTransaction(){
@@ -394,83 +379,79 @@
     const payment=parseFloat(paymentInput.value)||0;
     if(payment<total){alert(`Payment must be at least ₱${total.toFixed(2)}`);return;}
     const change=payment-total;
-    
-    // Deduct stock
     cart.forEach(item=>{
       const product=products[item.productId];
-      if(product&&product.stock!==undefined){
-        product.stock=Math.max(0,product.stock-item.qty);
-      }
+      if(product&&product.stock!==undefined){product.stock=Math.max(0,product.stock-item.qty);}
     });
-    
     transactions.unshift({id:Date.now(),time:new Date().toLocaleString(),items:cart.map(i=>({...i})),total,payment,change});
     cart=[];saveAll();renderCart();renderTransactionLog();renderProductList();playBeep('complete');
     paymentInput.value='';changeDisplay.style.display='none';
     alert(`✅ Sale complete!\nChange: ₱${change.toFixed(2)}`);
   }
 
-  // ============ DOWNLOAD AS EXCEL ============
-  function downloadXLSX(filename, sheets) {
-    let xml = '<?xml version="1.0" encoding="UTF-8"?>';
-    xml += '<?mso-application progid="Excel.Sheet"?>';
-    xml += '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
-    sheets.forEach(sheet => {
-      xml += '<Worksheet ss:Name="' + sheet.name + '"><Table>';
-      sheet.rows.forEach(row => {
-        xml += '<Row>';
-        row.forEach(cell => { xml += '<Cell><Data ss:Type="String">' + escapeXml(String(cell)) + '</Data></Cell>'; });
-        xml += '</Row>';
-      });
-      xml += '</Table></Worksheet>';
-    });
-    xml += '</Workbook>';
-    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  // ============ BACKUP & RESTORE ============
+  function backupAllData() {
+    const allData = {products, transactions, utangRecords, exportedAt: new Date().toISOString()};
+    const json = JSON.stringify(allData, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = filename;
+    link.download = `ministore_backup_${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(link.href);
+    playBeep('add');
   }
 
-  function escapeXml(str) { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function restoreAllData(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (data.products) products = data.products;
+        if (data.transactions) transactions = data.transactions;
+        if (data.utangRecords) utangRecords = data.utangRecords;
+        saveAll();
+        renderCart();renderTransactionLog();renderUtangLog();renderProductList();
+        alert('✅ Data restored successfully!');
+        playBeep('add');
+      } catch (err) { alert('❌ Invalid backup file.'); }
+    };
+    reader.readAsText(file);
+  }
 
-  function downloadTransactions() {
+  // ============ DOWNLOAD ============
+  function downloadXLSX(filename, sheets) {
+    let xml = '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">';
+    sheets.forEach(sheet => { xml += '<Worksheet ss:Name="'+sheet.name+'"><Table>'; sheet.rows.forEach(row=>{ xml+='<Row>'; row.forEach(cell=>{ xml+='<Cell><Data ss:Type="String">'+escapeXml(String(cell))+'</Data></Cell>'; }); xml+='</Row>'; }); xml+='</Table></Worksheet>'; });
+    xml += '</Workbook>';
+    const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const link = document.createElement('a'); link.href=URL.createObjectURL(blob); link.download=filename; link.click(); URL.revokeObjectURL(link.href);
+  }
+  function escapeXml(str){return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+  function downloadTransactions(){
     if(!transactions.length){alert('No transactions');return;}
     const rows=[['Date/Time','Items','Total','Payment','Change']];
     transactions.forEach(tx=>rows.push([tx.time,tx.items.map(i=>`${i.name} x${i.qty} @₱${i.price.toFixed(2)}`).join('; '),'₱'+tx.total.toFixed(2),'₱'+(tx.payment||0).toFixed(2),'₱'+(tx.change||0).toFixed(2)]));
     downloadXLSX(`Transactions_${new Date().toISOString().split('T')[0]}.xls`,[{name:'Transactions',rows}]);
-    playBeep('add');
   }
-
-  function downloadUtang() {
+  function downloadUtang(){
     if(!utangRecords.length){alert('No utang records');return;}
     const rows=[['Customer Name','Date','Items','Total']];
     utangRecords.forEach(r=>rows.push([r.name,r.time,r.items.map(i=>`${i.name} x${i.qty} @₱${i.price.toFixed(2)}`).join('; '),'₱'+r.total.toFixed(2)]));
     downloadXLSX(`Utang_${new Date().toISOString().split('T')[0]}.xls`,[{name:'Utang',rows}]);
-    playBeep('add');
   }
 
-  // ============ CLEAR ============
-  function clearCartOnly(){if(cart.length&&confirm('Clear cart?')){cart=[];saveAll();renderCart();paymentInput.value='';changeDisplay.style.display='none';}}
+  function clearCartOnly(){if(cart.length&&confirm('Clear cart?')){cart=[];saveAll();renderCart();resetPaymentAndChange();}}
   function clearTransactions(){if(transactions.length&&confirm('Clear transactions?')){transactions=[];saveAll();renderTransactionLog();}}
   function clearUtangLog(){if(utangRecords.length&&confirm('Clear utang?')){utangRecords=[];saveAll();renderUtangLog();}}
   function clearAllProducts(){if(Object.keys(products).length&&confirm('Delete all products?')){products={};saveAll();renderProductList();}}
   function resetAllData(){if(confirm('⚠️ DELETE EVERYTHING?')){stopSellScanner();stopRegisterScanner();products={};cart=[];transactions=[];utangRecords=[];saveAll();location.reload();}}
 
-  // ============ UTANG ============
   function addUtangRecord(){
     const name=utangNameInput.value.trim();
     if(!name){alert('Enter name');return;}
     if(!cart.length){alert('Cart empty');return;}
-    
-    // Deduct stock for utang too
-    cart.forEach(item=>{
-      const product=products[item.productId];
-      if(product&&product.stock!==undefined){
-        product.stock=Math.max(0,product.stock-item.qty);
-      }
-    });
-    
+    cart.forEach(item=>{const product=products[item.productId];if(product&&product.stock!==undefined){product.stock=Math.max(0,product.stock-item.qty);}});
     utangRecords.unshift({id:Date.now(),name,items:cart.map(i=>({...i})),total:calculateTotal(),time:new Date().toLocaleString()});
     cart=[];saveAll();renderCart();renderUtangLog();renderProductList();utangNameInput.value='';playBeep('add');
     alert(`📋 Utang for ${name}`);
@@ -479,49 +460,28 @@
   function renderUtangLog(){utangLogContainer.innerHTML=utangRecords.length?utangRecords.map(r=>`<div><strong>${escapeHtml(r.name)}</strong> · ${r.time} · ₱${r.total.toFixed(2)}</div>`).join(''):'<div>No records</div>';}
   function renderTransactionLog(){transactionLogContainer.innerHTML=transactions.length?transactions.map(t=>`<div>${t.time} · ${t.items.map(i=>i.name+' x'+i.qty).join(', ')} · ₱${t.total.toFixed(2)}${t.payment?' · Paid:₱'+t.payment.toFixed(2):''}${t.change?' · Change:₱'+t.change.toFixed(2):''}</div>`).join(''):'<div>No transactions</div>';}
 
-  // ============ PRODUCT LIST WITH STOCK ============
-  function getStockClass(stock) {
-    if(stock===undefined||stock===null)return'';
-    if(stock<=0)return'stock-out';
-    if(stock<=5)return'stock-low';
-    if(stock<=20)return'stock-medium';
-    return'stock-high';
-  }
-
+  function getStockClass(stock){if(stock===undefined)return'';if(stock<=0)return'stock-out';if(stock<=5)return'stock-low';if(stock<=20)return'stock-medium';return'stock-high';}
   function renderProductList(st=''){
     const entries=Object.entries(products);
     if(!entries.length){productListContainer.innerHTML='<div class="empty-state">No products</div>';return;}
     const q=st.toLowerCase();
     const f=entries.filter(([id,d])=>d.name.toLowerCase().includes(q)||id.toLowerCase().includes(q)||(d.barcode&&d.barcode.includes(q)));
-    productListContainer.innerHTML=f.map(([id,d])=>{
-      const stockDisplay=d.stock!==undefined?d.stock:'-';
-      const stockClass=getStockClass(d.stock);
-      return `<div class="product-item">
-        <div style="flex:1;"><strong>${escapeHtml(d.name)}</strong><br><small>${escapeHtml(d.barcode||id)}</small></div>
-        <span class="product-stock ${stockClass}">Stock: ${stockDisplay}</span>
-        <span style="font-weight:700;margin:0 6px;">₱${parseFloat(d.price).toFixed(2)}</span>
-        <button class="remove-mini" data-pid="${escapeHtml(id)}">✕</button>
-      </div>`;
-    }).join('')||'<div class="empty-state">No matches</div>';
+    productListContainer.innerHTML=f.map(([id,d])=>`<div class="product-item"><div style="flex:1;"><strong>${escapeHtml(d.name)}</strong><br><small>${escapeHtml(d.barcode||id)}</small></div><span class="product-stock ${getStockClass(d.stock)}">Stock: ${d.stock!==undefined?d.stock:'-'}</span><span style="font-weight:700;margin:0 6px;">₱${parseFloat(d.price).toFixed(2)}</span><button class="remove-mini" data-pid="${escapeHtml(id)}">✕</button></div>`).join('')||'<div class="empty-state">No matches</div>';
     document.querySelectorAll('.product-item .remove-mini').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();const id=b.dataset.pid;if(confirm(`Delete ${products[id]?.name}?`)){delete products[id];saveAll();renderProductList(productSearch.value);}}));
   }
 
   function escapeHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 
-  // ============ INIT ============
   function init(){
     loadFromStorage();renderCart();renderTransactionLog();renderUtangLog();renderProductList();
-    
     setTimeout(()=>startSellScanner(),800);
     
-    // Toggle sections
     toggleUtangBtn.addEventListener('click',()=>toggleSection(utangSection,toggleUtangBtn,'📋 Utang'));
     toggleTransactionsBtn.addEventListener('click',()=>toggleSection(transactionsSection,toggleTransactionsBtn,'🧾 Transactions'));
-    
     toggleScannerBtn.addEventListener('click',toggleScanner);
     productSearchSell.addEventListener('input',e=>renderSearchResults(e.target.value));
     addToCartBtn.addEventListener('click',manualAddToCart);
-    calculateChangeBtn.addEventListener('click',calculateChange);
+    calculateChangeBtn.addEventListener('click',calculateChangeBtnClick);
     completeTransactionBtn.addEventListener('click',completeTransaction);
     resetCartBtn.addEventListener('click',clearCartOnly);
     saveProductBtn.addEventListener('click',saveProduct);
@@ -537,9 +497,18 @@
     downloadTransactionsBtn.addEventListener('click',downloadTransactions);
     downloadUtangBtn.addEventListener('click',downloadUtang);
     
-    editQty.addEventListener('change',()=>{if(editQty.value<1)editQty.value=1;});
-    paymentInput.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();calculateChange();}});
+    // Real-time change display
+    paymentInput.addEventListener('input', updateChangeDisplay);
+    paymentInput.addEventListener('keydown', e => { if(e.key==='Enter'){ e.preventDefault(); completeTransaction(); } });
     
+    // Backup & Restore
+    backupDataBtn.addEventListener('click', backupAllData);
+    restoreDataBtn.addEventListener('click', ()=>restoreFileInput.click());
+    restoreFileInput.addEventListener('change', e => {
+      if(e.target.files.length>0){ if(confirm('Restore data? This will overwrite current products, transactions, and utang records.')) restoreAllData(e.target.files[0]); e.target.value=''; }
+    });
+    
+    editQty.addEventListener('change',()=>{if(editQty.value<1)editQty.value=1;});
     window.addEventListener('beforeunload',()=>{stopSellScanner();stopRegisterScanner();});
   }
 
